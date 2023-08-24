@@ -21,6 +21,11 @@ public class LogOperation{
     private String ip;
     private String description;
 
+    private String exception;
+    private String applicationName;
+
+
+
     public String getOperateUserId() {
         return operateUserId;
     }
@@ -125,5 +130,19 @@ public class LogOperation{
         this.description = description;
     }
 
+    public String getException() {
+        return exception;
+    }
 
+    public void setException(String exception) {
+        this.exception = exception;
+    }
+
+    public String getApplicationName() {
+        return applicationName;
+    }
+
+    public void setApplicationName(String applicationName) {
+        this.applicationName = applicationName;
+    }
 }

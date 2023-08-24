@@ -9,6 +9,10 @@ public enum ResultEnum {
     FAIL("失败"),
     UNKNOWN("未知");
 
+    public String getMessage() {
+        return message;
+    }
+
     private String message;
 
     ResultEnum(String message) {

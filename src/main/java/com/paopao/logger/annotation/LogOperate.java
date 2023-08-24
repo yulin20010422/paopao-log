@@ -41,6 +41,4 @@ public @interface LogOperate {
 
     String description() default "";
 
-    String exception() default "";
-
 }
