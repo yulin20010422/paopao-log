@@ -21,9 +21,9 @@ import org.aspectj.lang.annotation.*;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.pulsar.core.PulsarTemplate;
+import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -46,7 +46,7 @@ import static com.paopao.logger.common.Const.COLON;
  * @since 2023/8/18 15:14
  */
 @Aspect
-@Configuration
+@Component
 public class LogOperateAspect {
 
     private static final Logger logger = LoggerFactory.getLogger(LogOperateAspect.class);
@@ -105,7 +105,6 @@ public class LogOperateAspect {
         logOperation.setObject(annotation.object());
         logOperation.setObjectId(annotation.objectId());
         logOperation.setModule(annotation.module());
-        logOperation.setPlatform(annotation.platform());
         logOperation.setTableName(annotation.tableName());
         logOperation.setTimestamp(LocalDateTime.now().toString());
         logOperation.setPlatform(PlatformUtil.getAllInfo());
@@ -117,7 +116,7 @@ public class LogOperateAspect {
         } else {
             logOperation.setOperateUserId("游客");
         }
-        if (org.springframework.util.StringUtils.hasLength(logOperation.getObjectId())) {
+        if (StringUtils.hasLength(logOperation.getObjectId())) {
             String snapshotsCacheIfPresent = objectMapSnapshotsCache.getIfPresent(logOperation.getTableName() + COLON + logOperation.getObjectId());
             if (StringUtils.hasLength(snapshotsCacheIfPresent)) {
                 //如果缓存中有，就直接从缓存中获取
@@ -187,6 +186,7 @@ public class LogOperateAspect {
 
     @AfterThrowing(pointcut = "logOperation()", throwing = "exception")
     public void afterThrowingLogOperation(JoinPoint joinPoint, Throwable exception) throws JsonProcessingException, PulsarClientException {
+        LogOperationContext.clear();
         // Process after throwing exception...
         LogOperation logOperation = LogOperationContext.getLogOperationGenericRecord();
         //获取spring.application.name
@@ -198,7 +198,6 @@ public class LogOperateAspect {
         byte[] bytes = objectMapper.writeValueAsBytes(logOperation);
         //自行替换消息队列类型 kafka/rocketmq/rabbitmq
         pulsarTemplate.sendAsync("persistent://public/default/log-operation-topic", bytes);
-        LogOperationContext.clear();
     }
 
     private String getObject(String sql) {

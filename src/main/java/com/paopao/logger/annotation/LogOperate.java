@@ -19,14 +19,6 @@ public @interface LogOperate {
 
     String tableName() default "";
 
-    String platform() default "";
-
-    String timestamp() default "";
-
-    String operateUserId() default "";
-
-    String ip() default "";
-
     ActionEnum action();
 
     String object() default "";
