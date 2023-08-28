@@ -161,7 +161,8 @@ public class LogOperateAspect {
         }
         if (annotation.action().equals(ActionEnum.ADD)) {
             //根据tableName获取最新的一条数据
-            String sql = "select * from " + annotation.tableName() + " order by create_time desc limit 1";
+//            String sql = "select * from " + annotation.tableName() + " order by create_at desc limit 1";
+            String sql = "select * from " + annotation.tableName() + " order by create_at desc limit 1";
             jdbcTemplate.query(sql, rs -> {
                 String object = getObject(sql);
                 logOperation.setUpdateAfter(object);
