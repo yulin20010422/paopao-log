@@ -3,16 +3,27 @@
   <groupId>com.paopao</groupId>
   <artifactId>paopao-log</artifactId>
   <versioning>
-    <lastUpdated>20231220061126</lastUpdated>
+    <lastUpdated>20231220070753</lastUpdated>
     <snapshot>
-      <timestamp>20231220.061126</timestamp>
+      <timestamp>20231220.070753</timestamp>
       <buildNumber>1</buildNumber>
     </snapshot>
     <snapshotVersions>
       <snapshotVersion>
+        <extension>jar</extension>
+        <value>0.0.1-20231220.070753-1</value>
+        <updated>20231220070753</updated>
+      </snapshotVersion>
+      <snapshotVersion>
         <extension>pom</extension>
-        <value>0.0.1-20231220.061126-1</value>
-        <updated>20231220061126</updated>
+        <value>0.0.1-20231220.070753-1</value>
+        <updated>20231220070753</updated>
+      </snapshotVersion>
+      <snapshotVersion>
+        <classifier>sources</classifier>
+        <extension>jar</extension>
+        <value>0.0.1-20231220.070753-1</value>
+        <updated>20231220070753</updated>
       </snapshotVersion>
     </snapshotVersions>
   </versioning>
