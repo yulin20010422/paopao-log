@@ -3,10 +3,10 @@
   <groupId>com.paopao</groupId>
   <artifactId>paopao-log</artifactId>
   <versioning>
-    <release>v1.0.0</release>
+    <release>v1.0.1</release>
     <versions>
-      <version>v1.0.0</version>
+      <version>v1.0.1</version>
     </versions>
-    <lastUpdated>20231225035516</lastUpdated>
+    <lastUpdated>20231225060956</lastUpdated>
   </versioning>
 </metadata>
