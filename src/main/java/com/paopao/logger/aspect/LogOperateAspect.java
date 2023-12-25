@@ -3,6 +3,7 @@ package com.paopao.logger.aspect;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.paopao.logger.annotation.LogOperate;
+import com.paopao.logger.condition.LogOperationCondition;
 import com.paopao.logger.context.LogOperationContext;
 import com.paopao.logger.enums.ActionEnum;
 import com.paopao.logger.enums.ResultEnum;
@@ -24,6 +25,7 @@ import org.aspectj.lang.annotation.*;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -50,6 +52,7 @@ import static com.paopao.logger.common.Const.COLON;
  */
 @Aspect
 @Component
+@Conditional(LogOperationCondition.class)
 public class LogOperateAspect {
 
     private static final Logger logger = LoggerFactory.getLogger(LogOperateAspect.class);
@@ -76,7 +79,7 @@ public class LogOperateAspect {
     }
 
     @Before("logId()")
-    public void beforeLogId(JoinPoint joinPoint){
+    public void beforeLogId(JoinPoint joinPoint) {
 
     }
 

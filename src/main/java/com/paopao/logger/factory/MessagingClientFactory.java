@@ -7,6 +7,7 @@ import com.paopao.logger.messaging.PulsarMQTemplate;
 import com.paopao.logger.messaging.RedisMQTemplate;
 import com.paopao.logger.util.SpringUtil;
 import jakarta.annotation.Resource;
+import org.springframework.boot.SpringApplication;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 

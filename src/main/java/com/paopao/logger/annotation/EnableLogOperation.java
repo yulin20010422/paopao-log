@@ -1,7 +1,6 @@
 package com.paopao.logger.annotation;
 
-import com.paopao.logger.aspect.LogOperateAspect;
-import com.paopao.logger.config.LogOperationConfig;
+import com.paopao.logger.selector.LogOperationImportSelector;
 import org.springframework.context.annotation.Import;
 
 import java.lang.annotation.*;
@@ -10,10 +9,11 @@ import java.lang.annotation.*;
  * @author xiaobai
  * @since 2023/8/15 15:13
  */
+@Documented
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
-@Import({LogOperationConfig.class})
+@Inherited
+@Import(LogOperationImportSelector.class)
 public @interface EnableLogOperation {
-    boolean enable() default false;
 }
 
