@@ -51,7 +51,7 @@ public enum ActionEnum {
      */
     OTHER("其他");
 
-    private String message;
+    private final String message;
 
     public String getMessage() {
         return message;

@@ -6,10 +6,13 @@ import com.paopao.logger.annotation.LogOperate;
 import com.paopao.logger.context.LogOperationContext;
 import com.paopao.logger.enums.ActionEnum;
 import com.paopao.logger.enums.ResultEnum;
+import com.paopao.logger.factory.MessagingClientFactory;
+import com.paopao.logger.messaging.MessagingTemplate;
 import com.paopao.logger.pojo.LogOperation;
 import com.paopao.logger.util.IPUtil;
 import com.paopao.logger.util.PlatformUtil;
 import com.paopao.logger.util.SpringUtil;
+import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.shade.com.fasterxml.jackson.core.JsonProcessingException;
@@ -21,8 +24,8 @@ import org.aspectj.lang.annotation.*;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.pulsar.core.PulsarTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -53,7 +56,10 @@ public class LogOperateAspect {
 
     private final JdbcTemplate jdbcTemplate = SpringUtil.getBean("jdbcTemplate", JdbcTemplate.class);
 
-    private final PulsarTemplate pulsarTemplate = SpringUtil.getBean("pulsarTemplate", PulsarTemplate.class);
+//    private final PulsarMQTemplate pulsarTemplate = SpringUtil.getBean("pulsarTemplate", PulsarMQTemplate.class);
+
+    @Resource
+    private MessagingClientFactory clientFactory;
 
     Cache<String, String> objectMapSnapshotsCache = CacheBuilder
             .newBuilder()
@@ -63,6 +69,15 @@ public class LogOperateAspect {
 
     @Pointcut("@annotation(com.paopao.logger.annotation.LogOperate)")
     public void logOperation() {
+    }
+
+    @Pointcut("@annotation(com.paopao.logger.annotation.LogId)")
+    public void logId() {
+    }
+
+    @Before("logId()")
+    public void beforeLogId(JoinPoint joinPoint){
+
     }
 
     @Before("logOperation()")
@@ -82,6 +97,10 @@ public class LogOperateAspect {
                         logOperation.setObjectId(String.valueOf(id));
                     }
                 }
+                //没有.的形式、#开头的
+                if (!objectIdExpression.contains(".")) {
+                    logOperation.setObjectId(String.valueOf(args[0]));
+                }
             }
             //如果el表达式 是#xxx.id的形式，那么就从参数中获取
             if (objectIdExpression.startsWith("#") && objectIdExpression.contains(".")) {
@@ -91,6 +110,7 @@ public class LogOperateAspect {
                 Object[] args = joinPoint.getArgs();
                 for (Object arg : args) {
                     if (arg instanceof Long id && "id".equals(parameterName)) {
+                        logger.info("objectId:{}", id);
                         logOperation.setObjectId(String.valueOf(id));
                     }
                     if (arg instanceof JsonObject jsonObject && "id".equals(parameterName)) {
@@ -103,7 +123,7 @@ public class LogOperateAspect {
         logOperation.setAction(annotation.action().getMessage());
         logOperation.setDescription(annotation.description());
         logOperation.setObject(annotation.object());
-        logOperation.setObjectId(annotation.objectId());
+//        logOperation.setObjectId(annotation.objectId());
         logOperation.setModule(annotation.module());
         logOperation.setTableName(annotation.tableName());
         logOperation.setTimestamp(LocalDateTime.now().toString());
@@ -123,11 +143,15 @@ public class LogOperateAspect {
                 logOperation.setUpdateBefore(snapshotsCacheIfPresent);
             } else {
                 //查询这个对象操作前的信息
-                String sql = "select * from " + logOperation.getTableName() + " where id = " + logOperation.getObjectId();
-                jdbcTemplate.query(sql, rs -> {
-                    String object = getObject(sql);
-                    logOperation.setUpdateBefore(object);
-                });
+                try {
+                    String sql = "select * from " + logOperation.getTableName() + " where id = " + logOperation.getObjectId();
+                    jdbcTemplate.query(sql, rs -> {
+                        String object = getObject(sql);
+                        logOperation.setUpdateBefore(object);
+                    });
+                } catch (DataAccessException e) {
+                    logger.error("查询数据库失败:{}", e.getMessage());
+                }
             }
 
         }
@@ -150,11 +174,15 @@ public class LogOperateAspect {
                         // Do something with the id...
                         String sql = "select * from " + annotation.tableName() + " where id = " + id;
                         //存取这个对象的快照,便于下次查询可不用查询数据库
-                        jdbcTemplate.query(sql, rs -> {
-                            String object = getObject(sql);
-                            logOperation.setUpdateAfter(object);
-                            objectMapSnapshotsCache.put(annotation.tableName() + COLON + id, object);
-                        });
+                        try {
+                            jdbcTemplate.query(sql, rs -> {
+                                String object = getObject(sql);
+                                logOperation.setUpdateAfter(object);
+                                objectMapSnapshotsCache.put(annotation.tableName() + COLON + id, object);
+                            });
+                        } catch (DataAccessException e) {
+                            logger.error("查询数据库失败:{}", e.getMessage());
+                        }
                     }
                 }
             }
@@ -176,7 +204,7 @@ public class LogOperateAspect {
         byte[] bytes = objectMapper.writeValueAsBytes(logOperation);
         //将logOperationGenericRecord以avro的形式发送到pulsar
         //自行替换消息队列类型 kafka/rocketmq/rabbitmq
-        pulsarTemplate.sendAsync("persistent://public/default/log-operation-topic", bytes);
+        getMessagingTemplate().send(bytes);
         LogOperationContext.clear();
     }
 
@@ -198,7 +226,7 @@ public class LogOperateAspect {
         ObjectMapper objectMapper = new ObjectMapper();
         byte[] bytes = objectMapper.writeValueAsBytes(logOperation);
         //自行替换消息队列类型 kafka/rocketmq/rabbitmq
-        pulsarTemplate.sendAsync("persistent://public/default/log-operation-topic", bytes);
+        getMessagingTemplate().send(bytes);
     }
 
     private String getObject(String sql) {
@@ -218,5 +246,10 @@ public class LogOperateAspect {
     private LogOperate getLogOperateAnnotation(JoinPoint joinPoint) {
         MethodSignature methodSignature = (MethodSignature) joinPoint.getSignature();
         return methodSignature.getMethod().getAnnotation(LogOperate.class);
+    }
+
+
+    private MessagingTemplate getMessagingTemplate() {
+        return clientFactory.createClient();
     }
 }
