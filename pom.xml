@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.paopao</groupId>
     <artifactId>paopao-log</artifactId>
-    <version>1.0.8</version>
+    <version>1.0.9</version>
     <name>paopao-log</name>
     <description>paopao-log</description>
     <packaging>jar</packaging>
@@ -112,7 +112,7 @@
                 <artifactId>site-maven-plugin</artifactId>
                 <version>0.12</version>
                 <configuration>
-                    <oauth2Token>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</oauth2Token>
+                    <oauth2Token>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</oauth2Token>
                     <message>paopao-log ${project.version}</message>
                     <noJekyll>true</noJekyll>
                     <outputDirectory>${project.build.directory}/paopao-log</outputDirectory><!--本地jar地址-->
