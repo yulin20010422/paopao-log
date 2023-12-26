@@ -39,6 +39,7 @@ import java.util.concurrent.TimeUnit;
 
 import static com.paopao.logger.common.Const.AUTHORIZATION;
 import static com.paopao.logger.common.Const.COLON;
+import static com.paopao.logger.enums.ActionEnum.*;
 
 /**
  * 这种方式应对简单的业务场景，比较好用，但是如果用户的操作涉及一些隐式的变化，是没有办法记录的，即便是用监听器，也是比较麻烦的。
@@ -59,8 +60,6 @@ public class LogOperateAspect {
 
     private final JdbcTemplate jdbcTemplate = SpringUtil.getBean("jdbcTemplate", JdbcTemplate.class);
 
-//    private final PulsarMQTemplate pulsarTemplate = SpringUtil.getBean("pulsarTemplate", PulsarMQTemplate.class);
-
     @Resource
     private MessagingClientFactory clientFactory;
 
@@ -72,15 +71,6 @@ public class LogOperateAspect {
 
     @Pointcut("@annotation(com.paopao.logger.annotation.LogOperate)")
     public void logOperation() {
-    }
-
-    @Pointcut("@annotation(com.paopao.logger.annotation.LogId)")
-    public void logId() {
-    }
-
-    @Before("logId()")
-    public void beforeLogId(JoinPoint joinPoint) {
-
     }
 
     @Before("logOperation()")
@@ -126,7 +116,6 @@ public class LogOperateAspect {
         logOperation.setAction(annotation.action().getMessage());
         logOperation.setDescription(annotation.description());
         logOperation.setObject(annotation.object());
-//        logOperation.setObjectId(annotation.objectId());
         logOperation.setModule(annotation.module());
         logOperation.setTableName(annotation.tableName());
         logOperation.setTimestamp(LocalDateTime.now().toString());
@@ -139,7 +128,7 @@ public class LogOperateAspect {
         } else {
             logOperation.setOperateUserId("游客");
         }
-        if (StringUtils.hasLength(logOperation.getObjectId())) {
+        if (StringUtils.hasLength(logOperation.getObjectId()) && isUnnecessaryBefore(annotation.action())) {
             String snapshotsCacheIfPresent = objectMapSnapshotsCache.getIfPresent(logOperation.getTableName() + COLON + logOperation.getObjectId());
             if (StringUtils.hasLength(snapshotsCacheIfPresent)) {
                 //如果缓存中有，就直接从缓存中获取
@@ -163,36 +152,25 @@ public class LogOperateAspect {
 
     @AfterReturning(pointcut = "logOperation()", returning = "result")
     public void afterReturningLogOperation(JoinPoint joinPoint, Object result) throws PulsarClientException, JsonProcessingException {
-        // Process after method execution...
         LogOperation logOperation = LogOperationContext.getLogOperationGenericRecord();
         LogOperate annotation = getLogOperateAnnotation(joinPoint);
         if (Objects.nonNull(annotation.objectId())) {
-            String objectIdExpression = annotation.objectId();
-            if (objectIdExpression.startsWith("#")) {
-                String parameterName = objectIdExpression.substring(1);
-                Object[] args = joinPoint.getArgs();
-                for (Object arg : args) {
-                    if (arg instanceof Long id && "id".equals(parameterName)) {
-                        // Special handling for the 'id' parameter
-                        // Do something with the id...
-                        String sql = "select * from " + annotation.tableName() + " where id = " + id;
-                        //存取这个对象的快照,便于下次查询可不用查询数据库
-                        try {
-                            jdbcTemplate.query(sql, rs -> {
-                                String object = getObject(sql);
-                                logOperation.setUpdateAfter(object);
-                                objectMapSnapshotsCache.put(annotation.tableName() + COLON + id, object);
-                            });
-                        } catch (DataAccessException e) {
-                            logger.error("查询数据库失败:{}", e.getMessage());
-                        }
-                    }
+            if (logOperation.getObjectId() != null && isUnnecessaryAfter(annotation.action())) {
+                String sql = "select * from " + annotation.tableName() + " where id = " + logOperation.getObjectId();
+                //存取这个对象的快照,便于下次查询可不用查询数据库
+                try {
+                    jdbcTemplate.query(sql, rs -> {
+                        String object = getObject(sql);
+                        logOperation.setUpdateAfter(object);
+                        objectMapSnapshotsCache.put(annotation.tableName() + COLON + logOperation.getObjectId(), object);
+                    });
+                } catch (DataAccessException e) {
+                    logger.error("查询数据库失败:{}", e.getMessage());
                 }
             }
         }
         if (annotation.action().equals(ActionEnum.ADD)) {
             //根据tableName获取最新的一条数据
-//            String sql = "select * from " + annotation.tableName() + " order by create_at desc limit 1";
             String sql = "select * from " + annotation.tableName() + " order by create_at desc limit 1";
             jdbcTemplate.query(sql, rs -> {
                 String object = getObject(sql);
@@ -211,15 +189,10 @@ public class LogOperateAspect {
         LogOperationContext.clear();
     }
 
-    private String getId(String object) {
-        JsonObject jsonObject = JsonParser.parseString(object).getAsJsonObject();
-        return String.valueOf(jsonObject.get("id"));
-    }
 
     @AfterThrowing(pointcut = "logOperation()", throwing = "exception")
     public void afterThrowingLogOperation(JoinPoint joinPoint, Throwable exception) throws JsonProcessingException, PulsarClientException {
         LogOperationContext.clear();
-        // Process after throwing exception...
         LogOperation logOperation = LogOperationContext.getLogOperationGenericRecord();
         //获取spring.application.name
         String applicationName = SpringUtil.getApplicationName();
@@ -233,7 +206,6 @@ public class LogOperateAspect {
     }
 
     private String getObject(String sql) {
-//        Map<String, Object> stringObjectMap = jdbcTemplate.queryForMap(sql);
         JsonObject jsonObject = new JsonObject();
         jdbcTemplate.query(sql, rs -> {
             int columnCount = rs.getMetaData().getColumnCount();
@@ -244,15 +216,17 @@ public class LogOperateAspect {
         return jsonObject.toString();
     }
 
-    // Helper methods to extract annotations...
-
     private LogOperate getLogOperateAnnotation(JoinPoint joinPoint) {
         MethodSignature methodSignature = (MethodSignature) joinPoint.getSignature();
         return methodSignature.getMethod().getAnnotation(LogOperate.class);
     }
 
-
     private MessagingTemplate getMessagingTemplate() {
         return clientFactory.createClient();
+    }
+
+    private String getId(String object) {
+        JsonObject jsonObject = JsonParser.parseString(object).getAsJsonObject();
+        return String.valueOf(jsonObject.get("id"));
     }
 }

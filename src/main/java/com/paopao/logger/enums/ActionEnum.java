@@ -1,6 +1,11 @@
 package com.paopao.logger.enums;
 
 
+import com.google.common.collect.Lists;
+
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * @author xiaobai
  * @since 2023/8/22 11:32
@@ -50,6 +55,26 @@ public enum ActionEnum {
      * 其他
      */
     OTHER("其他");
+
+    public static List<ActionEnum> unnecessaryBefore() {
+        List<ActionEnum> actionEnums= Lists.newArrayList();
+        actionEnums.add(ActionEnum.DELETE);
+        return actionEnums;
+    }
+
+    public static List<ActionEnum> unnecessaryAfter() {
+        List<ActionEnum> actionEnums= Lists.newArrayList();
+        actionEnums.add(ActionEnum.DELETE);
+        return actionEnums;
+    }
+
+    public static boolean isUnnecessaryAfter(ActionEnum actionEnum) {
+        return unnecessaryAfter().contains(actionEnum);
+    }
+
+    public static boolean isUnnecessaryBefore(ActionEnum actionEnum) {
+        return unnecessaryBefore().contains(actionEnum);
+    }
 
     private final String message;
 
