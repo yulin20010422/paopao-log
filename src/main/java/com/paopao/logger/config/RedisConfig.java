@@ -32,7 +32,6 @@ public class RedisConfig {
 
     @Bean
     RedisMessageListenerContainer container(MessageListenerAdapter listenerAdapter,LettuceConnectionFactory redisConnectionFactory) {
-
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(redisConnectionFactory);
         container.addMessageListener(listenerAdapter, topic());
