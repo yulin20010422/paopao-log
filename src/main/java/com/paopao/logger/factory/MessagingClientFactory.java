@@ -31,15 +31,11 @@ public class MessagingClientFactory {
     }
 
     public MessagingTemplate createClient() {
-        switch (properties.getType().toLowerCase()) {
-            case "kafka":
-                throw new UnsupportedOperationException("暂不支持kafka");
-            case "mq":
-                throw new UnsupportedOperationException("暂不支持mq");
-            case "redis":
-                return new RedisMQTemplate(messagePublisher,properties.getTopic());
-            default:
-                return new PulsarMQTemplate(properties.getTopic(), pulsarTemplate);
-        }
+        return switch (properties.getType().toLowerCase()) {
+            case "kafka" -> throw new UnsupportedOperationException("暂不支持kafka");
+            case "mq" -> throw new UnsupportedOperationException("暂不支持mq");
+            case "redis" -> new RedisMQTemplate(messagePublisher, properties.getTopic());
+            default -> new PulsarMQTemplate(properties.getTopic(), pulsarTemplate);
+        };
     }
 }
