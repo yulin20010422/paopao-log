@@ -25,6 +25,7 @@ public class LogOperation{
     private String platform;
     private String ip;
     private String description;
+    private String where;
 
     private String exception;
     private String applicationName;

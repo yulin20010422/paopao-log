@@ -33,4 +33,6 @@ public @interface LogOperate {
 
     String description() default "";
 
+    String where() default "id";
+
 }

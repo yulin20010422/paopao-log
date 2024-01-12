@@ -33,6 +33,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -102,13 +103,21 @@ public class LogOperateAspect {
                 String fieldName = split[1];
                 Object[] args = joinPoint.getArgs();
                 for (Object arg : args) {
-                    if (arg instanceof Long id && "id".equals(parameterName)) {
-                        logger.info("objectId:{}", id);
-                        logOperation.setObjectId(String.valueOf(id));
+                    //单个
+                    String whereField = annotation.where();
+                    Object whereFiled = getWhereFiled(arg, whereField);
+                    if (Objects.nonNull(whereFiled)) {
+                        logOperation.setObjectId(String.valueOf(whereFiled));
                     }
-                    if (arg instanceof JsonObject jsonObject && "id".equals(parameterName)) {
-                        logOperation.setObjectId(jsonObject.get(fieldName).getAsString());
-                    }
+                    //多个
+//                    //arg是一个对象,从对象中获取id
+//                    if (arg instanceof Long id && "id".equals(parameterName)) {
+//                        logger.info("objectId:{}", id);
+//                        logOperation.setObjectId(String.valueOf(id));
+//                    }
+//                    if (arg instanceof JsonObject jsonObject && "id".equals(parameterName)) {
+//                        logOperation.setObjectId(jsonObject.get(fieldName).getAsString());
+//                    }
                 }
             }
         }
@@ -136,7 +145,9 @@ public class LogOperateAspect {
             } else {
                 //查询这个对象操作前的信息
                 try {
-                    String sql = "select * from " + logOperation.getTableName() + " where id = " + logOperation.getObjectId();
+                    String whereField = annotation.where();
+                    String sql = "select * from " + logOperation.getTableName() + " where " + whereField + " = " + logOperation.getObjectId();
+//                    String sql = "select * from " + logOperation.getTableName() + " where id = " + logOperation.getObjectId();
                     jdbcTemplate.query(sql, rs -> {
                         String object = getObject(sql);
                         logOperation.setUpdateBefore(object);
@@ -156,7 +167,8 @@ public class LogOperateAspect {
         LogOperate annotation = getLogOperateAnnotation(joinPoint);
         if (Objects.nonNull(annotation.objectId())) {
             if (logOperation.getObjectId() != null && isUnnecessaryAfter(annotation.action())) {
-                String sql = "select * from " + annotation.tableName() + " where id = " + logOperation.getObjectId();
+                String sql = "select * from " + logOperation.getTableName() + " where " + logOperation.getWhere() + " = " + logOperation.getObjectId();
+//                String sql = "select * from " + annotation.tableName() + " where id = " + logOperation.getObjectId();
                 //存取这个对象的快照,便于下次查询可不用查询数据库
                 try {
                     jdbcTemplate.query(sql, rs -> {
@@ -228,5 +240,24 @@ public class LogOperateAspect {
     private String getId(String object) {
         JsonObject jsonObject = JsonParser.parseString(object).getAsJsonObject();
         return String.valueOf(jsonObject.get("id"));
+    }
+
+    /**
+     * 反射获取某个object类型的id和name
+     */
+    private Object getWhereFiled(Object arg, String fieldName) {
+        // 使用反射获取id和name属性值
+        try {
+            Class<?> clazz = arg.getClass();
+
+            // 获取id属性值
+            Field idField = clazz.getDeclaredField(fieldName);
+            idField.setAccessible(true);
+
+            return idField.get(arg);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 }

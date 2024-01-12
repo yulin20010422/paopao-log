@@ -7,8 +7,7 @@ import com.paopao.logger.messaging.PulsarMQTemplate;
 import com.paopao.logger.messaging.RedisMQTemplate;
 import com.paopao.logger.util.SpringUtil;
 import jakarta.annotation.Resource;
-import org.springframework.boot.SpringApplication;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.pulsar.core.PulsarTemplate;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,7 +19,7 @@ public class MessagingClientFactory {
 
     private final MessagingProperties properties;
 
-    private final org.springframework.pulsar.core.PulsarTemplate pulsarTemplate = SpringUtil.getBean("pulsarTemplate", org.springframework.pulsar.core.PulsarTemplate.class);
+    private final PulsarTemplate pulsarTemplate = SpringUtil.getBean("pulsarTemplate", org.springframework.pulsar.core.PulsarTemplate.class);
 
     @Resource
     private MessagePublisher messagePublisher;
