@@ -10,7 +10,7 @@
     </parent>
     <groupId>io.github.gracefullliam</groupId>
     <artifactId>paopao-log</artifactId>
-    <version>alpha</version>
+    <version>beta</version>
     <name>paopao-log</name>
     <description>paopao-log</description>
     <url>https://github.com/gracefullliam/paopao-log</url>
