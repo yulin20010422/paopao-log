@@ -4,6 +4,8 @@ package com.paopao.logger.pojo;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.List;
+
 /**
  * @author xiaobai
  * @since 2023/8/11 15:26
@@ -16,6 +18,7 @@ public class LogOperation{
     private String tableName;
     private String object;
     private String objectId;
+    private List<String> objectIds;
     private String module;
     private String timestamp;
     private String action;

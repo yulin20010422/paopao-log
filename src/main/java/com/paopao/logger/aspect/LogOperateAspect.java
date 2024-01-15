@@ -1,7 +1,5 @@
 package com.paopao.logger.aspect;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import com.paopao.logger.annotation.LogOperate;
 import com.paopao.logger.condition.LogOperationCondition;
 import com.paopao.logger.context.LogOperationContext;
@@ -29,18 +27,21 @@ import org.springframework.context.annotation.Conditional;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.lang.reflect.Field;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.paopao.logger.common.Const.AUTHORIZATION;
-import static com.paopao.logger.common.Const.COLON;
-import static com.paopao.logger.enums.ActionEnum.*;
+import static com.paopao.logger.enums.ActionEnum.isUnnecessaryAfter;
+import static com.paopao.logger.enums.ActionEnum.isUnnecessaryBefore;
 
 /**
  * 这种方式应对简单的业务场景，比较好用，但是如果用户的操作涉及一些隐式的变化，是没有办法记录的，即便是用监听器，也是比较麻烦的。
@@ -61,14 +62,13 @@ public class LogOperateAspect {
 
     private final JdbcTemplate jdbcTemplate = SpringUtil.getBean("jdbcTemplate", JdbcTemplate.class);
 
+    /**
+     * 查询结果分隔符
+     */
+    private final String SPLIT_QUERY_RESULT = "这是一个分割符号";
+
     @Resource
     private MessagingClientFactory clientFactory;
-
-    Cache<String, String> objectMapSnapshotsCache = CacheBuilder
-            .newBuilder()
-            .expireAfterAccess(3, TimeUnit.HOURS)
-            .maximumSize(1000)
-            .build();
 
     @Pointcut("@annotation(com.paopao.logger.annotation.LogOperate)")
     public void logOperation() {
@@ -101,26 +101,26 @@ public class LogOperateAspect {
                 String[] split = objectIdExpression.split("\\.");
                 String parameterName = split[0].substring(1);
                 String fieldName = split[1];
+                //获取.后面
+                String parameterNameAfter = split[1];
+
                 Object[] args = joinPoint.getArgs();
                 for (Object arg : args) {
                     //单个
                     String whereField = annotation.where();
-                    Object whereFiled = getWhereFiled(arg, whereField);
+                    Object whereFiled = getWhereFiled(arg, whereField, parameterNameAfter);
                     if (Objects.nonNull(whereFiled)) {
+                        if (whereFiled instanceof List) {
+                            logOperation.setObjectIds((List<String>) whereFiled);
+                        } else {
+                            logOperation.setObjectId(String.valueOf(whereFiled));
+                        }
                         logOperation.setObjectId(String.valueOf(whereFiled));
                     }
-                    //多个
-//                    //arg是一个对象,从对象中获取id
-//                    if (arg instanceof Long id && "id".equals(parameterName)) {
-//                        logger.info("objectId:{}", id);
-//                        logOperation.setObjectId(String.valueOf(id));
-//                    }
-//                    if (arg instanceof JsonObject jsonObject && "id".equals(parameterName)) {
-//                        logOperation.setObjectId(jsonObject.get(fieldName).getAsString());
-//                    }
                 }
             }
         }
+        logOperation.setWhere(annotation.where());
         //一些细节操作
         logOperation.setAction(annotation.action().getMessage());
         logOperation.setDescription(annotation.description());
@@ -137,26 +137,17 @@ public class LogOperateAspect {
         } else {
             logOperation.setOperateUserId("游客");
         }
-        if (StringUtils.hasLength(logOperation.getObjectId()) && isUnnecessaryBefore(annotation.action())) {
-            String snapshotsCacheIfPresent = objectMapSnapshotsCache.getIfPresent(logOperation.getTableName() + COLON + logOperation.getObjectId());
-            if (StringUtils.hasLength(snapshotsCacheIfPresent)) {
-                //如果缓存中有，就直接从缓存中获取
-                logOperation.setUpdateBefore(snapshotsCacheIfPresent);
+        if (StringUtils.hasLength(logOperation.getObjectId()) && !isUnnecessaryBefore(annotation.action()) ||
+                !CollectionUtils.isEmpty(logOperation.getObjectIds()) && !isUnnecessaryBefore(annotation.action())) {
+            //查询这个对象操作前的信息
+            String whereField = annotation.where();
+            if (CollectionUtils.isEmpty(logOperation.getObjectIds())) {
+                String sql = "select * from " + logOperation.getTableName() + " where " + whereField + " = " + logOperation.getObjectId();
+                logOperation.setUpdateBefore(getEffectString(sql));
             } else {
-                //查询这个对象操作前的信息
-                try {
-                    String whereField = annotation.where();
-                    String sql = "select * from " + logOperation.getTableName() + " where " + whereField + " = " + logOperation.getObjectId();
-//                    String sql = "select * from " + logOperation.getTableName() + " where id = " + logOperation.getObjectId();
-                    jdbcTemplate.query(sql, rs -> {
-                        String object = getObject(sql);
-                        logOperation.setUpdateBefore(object);
-                    });
-                } catch (DataAccessException e) {
-                    logger.error("查询数据库失败:{}", e.getMessage());
-                }
+                String sql = "select * from " + logOperation.getTableName() + " where " + whereField + " in (" + String.join(",", logOperation.getObjectIds()) + ")";
+                logOperation.setUpdateBefore(getEffectStrings(sql));
             }
-
         }
         LogOperationContext.setLogOperationGenericRecord(logOperation);
     }
@@ -166,29 +157,23 @@ public class LogOperateAspect {
         LogOperation logOperation = LogOperationContext.getLogOperationGenericRecord();
         LogOperate annotation = getLogOperateAnnotation(joinPoint);
         if (Objects.nonNull(annotation.objectId())) {
-            if (logOperation.getObjectId() != null && isUnnecessaryAfter(annotation.action())) {
-                String sql = "select * from " + logOperation.getTableName() + " where " + logOperation.getWhere() + " = " + logOperation.getObjectId();
-//                String sql = "select * from " + annotation.tableName() + " where id = " + logOperation.getObjectId();
-                //存取这个对象的快照,便于下次查询可不用查询数据库
-                try {
-                    jdbcTemplate.query(sql, rs -> {
-                        String object = getObject(sql);
-                        logOperation.setUpdateAfter(object);
-                        objectMapSnapshotsCache.put(annotation.tableName() + COLON + logOperation.getObjectId(), object);
-                    });
-                } catch (DataAccessException e) {
-                    logger.error("查询数据库失败:{}", e.getMessage());
+            if (logOperation.getObjectId() != null && !isUnnecessaryAfter(annotation.action()) ||
+                    !CollectionUtils.isEmpty(logOperation.getObjectIds()) && !isUnnecessaryAfter(annotation.action())) {
+                if (CollectionUtils.isEmpty(logOperation.getObjectIds())) {
+                    String sql = "select * from " + logOperation.getTableName() + " where " + logOperation.getWhere() + " = " + logOperation.getObjectId();
+                    logOperation.setUpdateAfter(getEffectString(sql));
+                } else {
+                    String sql = "select * from " + logOperation.getTableName() + " where " + logOperation.getWhere() + " in (" + String.join(",", logOperation.getObjectIds()) + ")";
+                    logOperation.setUpdateAfter(getEffectStrings(sql));
                 }
             }
         }
         if (annotation.action().equals(ActionEnum.ADD)) {
             //根据tableName获取最新的一条数据
             String sql = "select * from " + annotation.tableName() + " order by create_at desc limit 1";
-            jdbcTemplate.query(sql, rs -> {
-                String object = getObject(sql);
-                logOperation.setUpdateAfter(object);
-                logOperation.setObjectId(getId(object).replace("\"", ""));
-            });
+            String effectString = getEffectString(sql);
+            logOperation.setUpdateAfter(effectString);
+            logOperation.setObjectId(getId(effectString).replace("\"", ""));
         }
         String applicationName = SpringUtil.getApplicationName();
         logOperation.setResult(ResultEnum.SUCCESS.getMessage());
@@ -204,7 +189,6 @@ public class LogOperateAspect {
 
     @AfterThrowing(pointcut = "logOperation()", throwing = "exception")
     public void afterThrowingLogOperation(JoinPoint joinPoint, Throwable exception) throws JsonProcessingException, PulsarClientException {
-        LogOperationContext.clear();
         LogOperation logOperation = LogOperationContext.getLogOperationGenericRecord();
         //获取spring.application.name
         String applicationName = SpringUtil.getApplicationName();
@@ -215,6 +199,7 @@ public class LogOperateAspect {
         byte[] bytes = objectMapper.writeValueAsBytes(logOperation);
         //自行替换消息队列类型 kafka/rocketmq/rabbitmq
         getMessagingTemplate().send(bytes);
+        LogOperationContext.clear();
     }
 
     private String getObject(String sql) {
@@ -245,19 +230,68 @@ public class LogOperateAspect {
     /**
      * 反射获取某个object类型的id和name
      */
-    private Object getWhereFiled(Object arg, String fieldName) {
+    private Object getWhereFiled(Object arg, String fieldName, String afterArg) {
         // 使用反射获取id和name属性值
         try {
             Class<?> clazz = arg.getClass();
-
+            //获取arg下的afterArg属性
+            Field afterArgField = clazz.getDeclaredField(afterArg);
+            //判断afterArgField是否是一个集合
+            if (afterArgField.getType().isAssignableFrom(List.class)) {
+                //获取集合中的第一个元素
+                List<?> list = (List<?>) afterArgField.get(arg);
+                if (!list.isEmpty()) {
+                    return list.stream().map(item -> {
+                        try {
+                            Field idField = item.getClass().getDeclaredField(fieldName);
+                            idField.setAccessible(true);
+                            return idField.get(item).toString();
+                        } catch (NoSuchFieldException | IllegalAccessException e) {
+                            logger.error("获取id和name属性值失败:{}", e.getMessage());
+                        }
+                        return null;
+                    }).toList();
+                }
+            }
             // 获取id属性值
             Field idField = clazz.getDeclaredField(fieldName);
             idField.setAccessible(true);
-
             return idField.get(arg);
         } catch (NoSuchFieldException | IllegalAccessException e) {
-            e.printStackTrace();
+            logger.error("获取id和name属性值失败:{}", e.getMessage());
         }
         return null;
+    }
+
+    private String getEffectString(String sql) {
+        try {
+            jdbcTemplate.query(sql, rs -> {
+                return getObject(sql);
+            });
+        } catch (DataAccessException e) {
+            logger.error("查询数据库失败:{}", e.getMessage());
+        }
+        return null;
+    }
+
+    private String getEffectStrings(String sql) {
+        AtomicReference<String> effectString = new AtomicReference<>("");
+        List<Map<String, Object>> maps;
+        try {
+            maps = jdbcTemplate.queryForList(sql);
+            maps.forEach(item -> {
+                JsonObject jsonObject = new JsonObject();
+                item.forEach((key, value) -> jsonObject.addProperty(key, String.valueOf(value)));
+                String s1 = effectString.get();
+                if (StringUtils.hasLength(s1)) {
+                    effectString.set(s1 + SPLIT_QUERY_RESULT + jsonObject.toString());
+                } else {
+                    effectString.set(jsonObject.toString());
+                }
+            });
+        } catch (DataAccessException e) {
+            logger.error("查询数据库失败:{}", e.getMessage());
+        }
+        return effectString.get();
     }
 }
