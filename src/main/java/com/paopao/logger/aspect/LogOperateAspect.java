@@ -16,6 +16,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.shade.com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.pulsar.shade.com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.pulsar.shade.com.google.gson.JsonElement;
 import org.apache.pulsar.shade.com.google.gson.JsonObject;
 import org.apache.pulsar.shade.com.google.gson.JsonParser;
 import org.aspectj.lang.JoinPoint;
@@ -173,7 +174,11 @@ public class LogOperateAspect {
             String sql = "select * from " + annotation.tableName() + " order by create_at desc limit 1";
             String effectString = getEffectString(sql);
             logOperation.setUpdateAfter(effectString);
-            logOperation.setObjectId(getId(effectString).replace("\"", ""));
+            if (StringUtils.hasLength(effectString)) {
+                String id = getId(effectString);
+                if (StringUtils.hasLength(id))
+                    logOperation.setObjectId(id.replace("\"", ""));
+            }
         }
         String applicationName = SpringUtil.getApplicationName();
         logOperation.setResult(ResultEnum.SUCCESS.getMessage());
@@ -223,8 +228,12 @@ public class LogOperateAspect {
     }
 
     private String getId(String object) {
-        JsonObject jsonObject = JsonParser.parseString(object).getAsJsonObject();
-        return String.valueOf(jsonObject.get("id"));
+        JsonElement jsonElement = JsonParser.parseString(object);
+        if (jsonElement.isJsonArray()) {
+            JsonObject jsonObject = jsonElement.getAsJsonObject();
+            return String.valueOf(jsonObject.get("id"));
+        }
+        return null;
     }
 
     /**
@@ -265,7 +274,7 @@ public class LogOperateAspect {
 
     private String getEffectString(String sql) {
         try {
-            jdbcTemplate.query(sql, rs -> {
+            return jdbcTemplate.query(sql, rs -> {
                 return getObject(sql);
             });
         } catch (DataAccessException e) {
