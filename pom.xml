@@ -87,6 +87,12 @@
             <version>0.2.0</version>
             <scope>compile</scope>
         </dependency>
+        <!-- RabbitMQ  -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+            <scope>compile</scope>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

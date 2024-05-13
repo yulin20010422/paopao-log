@@ -9,8 +9,8 @@ import org.springframework.pulsar.core.PulsarTemplate;
  */
 public class PulsarMQTemplate implements MessagingTemplate {
 
-    private PulsarTemplate pulsarTemplate;
-    private String topic;
+    private final PulsarTemplate pulsarTemplate;
+    private final String topic;
 
     public PulsarMQTemplate(String topic, PulsarTemplate pulsarTemplate) {
         this.pulsarTemplate = pulsarTemplate;

@@ -65,4 +65,8 @@ public class SpringUtil implements BeanFactoryPostProcessor, ApplicationContextA
     public static <T> T getBean(String name, Class<T> clazz) {
         return getBeanFactory().getBean(name, clazz);
     }
+
+    public static <T> T getBean(Class<T> clazz){
+        return getBeanFactory().getBean(clazz);
+    }
 }
