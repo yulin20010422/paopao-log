@@ -1,5 +1,7 @@
 package com.paopao.logger.util;
 
+import com.paopao.logger.config.MessagingProperties;
+import jakarta.annotation.Resource;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;

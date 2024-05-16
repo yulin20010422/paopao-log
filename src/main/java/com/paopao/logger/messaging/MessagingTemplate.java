@@ -8,5 +8,5 @@ import org.apache.pulsar.client.api.PulsarClientException;
  */
 public interface MessagingTemplate {
 
-    void send(byte[] message) throws PulsarClientException;
+    void send(byte[] message);
 }

@@ -18,7 +18,11 @@ public class PulsarMQTemplate implements MessagingTemplate {
     }
 
     @Override
-    public void send(byte[] message) throws PulsarClientException {
-        pulsarTemplate.send(topic, message);
+    public void send(byte[] message)  {
+        try {
+            pulsarTemplate.send(topic, message);
+        } catch (PulsarClientException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

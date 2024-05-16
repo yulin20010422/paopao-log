@@ -1,5 +1,6 @@
 package com.paopao.logger.factory;
 
+import com.paopao.logger.client.LogServiceClient;
 import com.paopao.logger.config.MessagingProperties;
 import com.paopao.logger.core.redis.MessagePublisher;
 import com.paopao.logger.messaging.MessagingTemplate;
@@ -21,9 +22,6 @@ public class MessagingClientFactory {
 
     private final MessagingProperties properties;
 
-    private final PulsarTemplate pulsarTemplate = SpringUtil.getBean("pulsarTemplate", org.springframework.pulsar.core.PulsarTemplate.class);
-
-    private final RabbitTemplate rabbitTemplate = SpringUtil.getBean(RabbitTemplate.class);
 
     @Resource
     private MessagePublisher messagePublisher;
@@ -34,11 +32,14 @@ public class MessagingClientFactory {
     }
 
     public MessagingTemplate createClient() {
-        return switch (properties.getType().toLowerCase()) {
+        String lowerCase = properties.getType().toLowerCase();
+        return switch (lowerCase) {
             case "kafka" -> throw new UnsupportedOperationException("暂不支持kafka");
-            case "rabbitmq" -> new RabbitMQTemplate(rabbitTemplate, properties.getTopic());
+            case "rabbitmq" -> new RabbitMQTemplate(SpringUtil.getBean(RabbitTemplate.class), properties.getTopic());
             case "redis" -> new RedisMQTemplate(messagePublisher, properties.getTopic());
-            default -> new PulsarMQTemplate(properties.getTopic(), pulsarTemplate);
+            case "pulasr" ->
+                    new PulsarMQTemplate(properties.getTopic(), SpringUtil.getBean("pulsarTemplate", org.springframework.pulsar.core.PulsarTemplate.class));
+            default -> new LogServiceClient();
         };
     }
 }
