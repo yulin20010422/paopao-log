@@ -39,7 +39,7 @@ public class MessagingClientFactory {
             case "redis" -> new RedisMQTemplate(messagePublisher, properties.getTopic());
             case "pulasr" ->
                     new PulsarMQTemplate(properties.getTopic(), SpringUtil.getBean("pulsarTemplate", org.springframework.pulsar.core.PulsarTemplate.class));
-            default -> new LogServiceClient();
+            default -> SpringUtil.getBean(LogServiceClient.class);
         };
     }
 }
